@@ -1,28 +1,28 @@
-import requests
 import argparse
 import sys
 import getpass
+import requests
 import xmltodict
 
 # This is here ONLY to suppress self-signed certoficate warnings
 import urllib3
 
-def operatorInfo(session, server, opname):
+def get_operator_info(session, server, opname):
     url = f"https://{server}/api/operator/{opname}"
-    response = session.get(url, verify=False)
+    result = session.get(url, verify=False)
 
-    if response.status_code < 200 or response.status_code >= 300:
-        print(f"REST API authentication failed with status {response.status_code}")
-        print(f"Reason: {response.text}")
+    if result.status_code < 200 or result.status_code >= 300:
+        print(f"REST API authentication failed with status {result.status_code}")
+        print(f"Reason: {result.text}")
         return None
 
-    xmltree = xmltodict.parse(response.text)
+    xmltree = xmltodict.parse(result.text)
 
     return xmltree
 
 
 ## Do an operator PUT
-def operatorPut(session, server, opname, xmldata):
+def put_operator(session, server, opname, xmldata):
     qheader = {
         'Content-Type' : 'application/x-www-form-urlencoded'
     }
@@ -45,10 +45,10 @@ def operatorPut(session, server, opname, xmldata):
     return True
 
 
-def enableOperator(session, server, opname, isMO):
+def enable_operator(session, server, opname, is_m_op):
     ## Template for BigFix REST API Operator actions
-    if isMO:
-        operatorTemplate = f'''\
+    if is_m_op:
+        op_xml = f'''\
         <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
         <Operator>
         <Name>{opname}</Name>
@@ -57,7 +57,7 @@ def enableOperator(session, server, opname, isMO):
         </BESAPI>
         '''.strip()
     else:
-        operatorTemplate = f'''\
+        op_xml = f'''\
         <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
         <Operator>
         <Name>{opname}</Name>
@@ -66,13 +66,13 @@ def enableOperator(session, server, opname, isMO):
         </BESAPI>
         '''.strip()
 
-    return operatorPut(session, server, opname, operatorTemplate)
+    return put_operator(session, server, opname, op_xml)
 
 
-def disableOperator(session, server, opname, isMO):
+def disable_operator(session, server, opname, is_m_op):
     ## Template for BigFix REST API Operator actions
-    if isMO:
-        operatorTemplate = f'''\
+    if is_m_op:
+        op_xml = f'''\
         <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
         <Operator>
         <Name>{opname}</Name>
@@ -81,7 +81,7 @@ def disableOperator(session, server, opname, isMO):
         </BESAPI>
         '''.strip()
     else:
-        operatorTemplate = f'''\
+        op_xml = f'''\
         <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
         <Operator>
         <Name>{opname}</Name>
@@ -90,11 +90,11 @@ def disableOperator(session, server, opname, isMO):
         </BESAPI>
         '''.strip()
 
-    return operatorPut(session, server, opname, operatorTemplate)
+    return put_operator(session, server, opname, op_xml)
 
-def chgOperatorPassword(session, server, opname, password):
+def change_operator_password(session, server, opname, password):
     ## Template for BigFix REST API Operator actions
-    operatorTemplate = f'''\
+    op_xml = f'''\
     <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
     <Operator>
     <Name>{opname}</Name>
@@ -103,7 +103,7 @@ def chgOperatorPassword(session, server, opname, password):
     </BESAPI>
     '''.strip()
 
-    return operatorPut(session, server, opname, operatorTemplate)
+    return put_operator(session, server, opname, op_xml)
 
 
 
@@ -150,7 +150,7 @@ opgroup.add_argument("-c", "--changepw"
 
 args = parser.parse_args()
 
-if args.bfpass == None:
+if args.bfpass is None:
     ## TODO: Modify to prompt until 2 consecutive matching passwords
     passwd = getpass.getpass(prompt="Enter REST API password:")
 else:
@@ -159,10 +159,10 @@ else:
 ## We have parsed our command line arguments.
 
 ## Create HTTP(S) session
-session = requests.Session()
-session.auth = (args.bfuser, passwd)
+g_session = requests.Session()
+g_session.auth = (args.bfuser, passwd)
 
-response = session.get(f"https://{args.bfserver}/api/login", verify=False)
+response = g_session.get(f"https://{args.bfserver}/api/login", verify=False)
 
 ## Terminate if not a success code
 if response.status_code < 200 or response.status_code >= 300:
@@ -170,35 +170,35 @@ if response.status_code < 200 or response.status_code >= 300:
     print(f"Reason: {response.text}")
     sys.exit(1)
 
-opInfo = operatorInfo(session, args.bfserver, args.operator)
+opInfo = get_operator_info(g_session, args.bfserver, args.operator)
 
-if opInfo == None:
+if opInfo is None:
     print("Operator does not exist")
     sys.exit(1)
 
-if ("LDAPDN" in opInfo["BESAPI"]["Operator"]) and (args.changepw != None):
+if ("LDAPDN" in opInfo["BESAPI"]["Operator"]) and (args.changepw is not None):
     print("You cannot change the password of an LDAP/AD BigFix user through the REST API")
     sys.exit(1)
-    
-isMO = False
+
+g_ismop = False
 
 if opInfo["BESAPI"]["Operator"]["MasterOperator"] == "true":
-    isMO = True
+    g_ismop = True
 else:
     lp = opInfo["BESAPI"]["Operator"]["LoginPermission"]
     print(f"This operator's login permission is {lp}")
-    if (lp == "Unrestricted"):
+    if lp == "Unrestricted":
         print("IF YOU USE THIS SCRIPT TO ENABLE THIS USER, the login permission")
         print("will change to RoleRestricted!")
 
 if args.enable:
-    if not enableOperator(session, args.bfserver, args.operator, isMO):
+    if not enable_operator(g_session, args.bfserver, args.operator, g_ismop):
         sys.exit(1)
 elif args.disable:
-    if not disableOperator(session, args.bfserver, args.operator, isMO):
+    if not disable_operator(g_session, args.bfserver, args.operator, g_ismop):
         sys.exit(1)
 elif args.changepw:
-    if not chgOperatorPassword(session, args.bfserver, args.operator, args.changepw):
+    if not change_operator_password(g_session, args.bfserver, args.operator, args.changepw):
         sys.exit(1)
 else:
     print("Invalid operation")
