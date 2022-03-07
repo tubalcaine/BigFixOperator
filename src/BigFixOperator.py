@@ -37,9 +37,9 @@ def operatorPut(session, server, opname, xmldata):
 
     result = session.send(prepped, verify = False)
 
-    if response.status_code < 200 or response.status_code >= 300:
-        print(f"REST API authentication failed with status {response.status_code}")
-        print(f"Reason: {response.text}")
+    if result.status_code < 200 or result.status_code >= 300:
+        print(f"REST API authentication failed with status {result.status_code}")
+        print(f"Reason: {result.text}")
         return False
 
     return True
@@ -57,7 +57,7 @@ def enableOperator(session, server, opname, isMO):
         </BESAPI>
         '''.strip()
     else:
-        operatorTemplate = '''\
+        operatorTemplate = f'''\
         <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
         <Operator>
         <Name>{opname}</Name>
@@ -72,7 +72,7 @@ def enableOperator(session, server, opname, isMO):
 def disableOperator(session, server, opname, isMO):
     ## Template for BigFix REST API Operator actions
     if isMO:
-        operatorTemplate = '''\
+        operatorTemplate = f'''\
         <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
         <Operator>
         <Name>{opname}</Name>
@@ -81,7 +81,7 @@ def disableOperator(session, server, opname, isMO):
         </BESAPI>
         '''.strip()
     else:
-        operatorTemplate = '''\
+        operatorTemplate = f'''\
         <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
         <Operator>
         <Name>{opname}</Name>
@@ -183,6 +183,12 @@ isMO = False
 
 if opInfo["BESAPI"]["Operator"]["MasterOperator"] == "true":
     isMO = True
+else:
+    lp = opInfo["BESAPI"]["Operator"]["LoginPermission"]
+    print(f"This operator's login permission is {lp}")
+    if (lp == "Unrestricted"):
+        print("IF YOU USE THIS SCRIPT TO ENABLE THIS USER, the login permission")
+        print("will change to RoleRestricted!")
 
 if args.enable:
     if not enableOperator(session, args.bfserver, args.operator, isMO):
