@@ -48,10 +48,10 @@ def operatorPut(session, server, opname, xmldata):
 def enableOperator(session, server, opname, isMO):
     ## Template for BigFix REST API Operator actions
     if isMO:
-        operatorTemplate = '''\
+        operatorTemplate = f'''\
         <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
         <Operator>
-        <Name>IEMAdmin</Name>
+        <Name>{opname}</Name>
         <LoginPermission>Unrestricted</LoginPermission>
         </Operator>
         </BESAPI>
@@ -60,13 +60,8 @@ def enableOperator(session, server, opname, isMO):
         operatorTemplate = '''\
         <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
         <Operator>
-        <Name>IEMAdmin</Name>
-        <InterfaceLogins>
-        <!-- THESE enable/disable access -->
-        <Console>true</Console>
-        <WebUI>true</WebUI>
-        <API>true</API>
-        </InterfaceLogins>
+        <Name>{opname}</Name>
+        <LoginPermission>RoleRestricted</LoginPermission>
         </Operator>
         </BESAPI>
         '''.strip()
@@ -80,7 +75,7 @@ def disableOperator(session, server, opname, isMO):
         operatorTemplate = '''\
         <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
         <Operator>
-        <Name>IEMAdmin</Name>
+        <Name>{opname}</Name>
         <LoginPermission>Disabled</LoginPermission>
         </Operator>
         </BESAPI>
@@ -89,13 +84,8 @@ def disableOperator(session, server, opname, isMO):
         operatorTemplate = '''\
         <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
         <Operator>
-        <Name>IEMAdmin</Name>
-        <InterfaceLogins>
-        <!-- THESE enable/disable access -->
-        <Console>false</Console>
-        <WebUI>false</WebUI>
-        <API>false</API>
-        </InterfaceLogins>
+        <Name>{opname}</Name>
+        <LoginPermission>Disabled</LoginPermission>
         </Operator>
         </BESAPI>
         '''.strip()
@@ -107,7 +97,7 @@ def chgOperatorPassword(session, server, opname, password):
     operatorTemplate = f'''\
     <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
     <Operator>
-    <Name>IEMAdmin</Name>
+    <Name>{opname}</Name>
     <Password>{password}</Password>
     </Operator>
     </BESAPI>
