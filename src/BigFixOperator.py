@@ -2,20 +2,23 @@ import requests
 import argparse
 import sys
 import getpass
+import xmltodict
 
 # This is here ONLY to suppress self-signed certoficate warnings
 import urllib3
 
-def operatorExists(session, server, opname):
+def operatorInfo(session, server, opname):
     url = f"https://{server}/api/operator/{opname}"
     response = session.get(url, verify=False)
 
     if response.status_code < 200 or response.status_code >= 300:
         print(f"REST API authentication failed with status {response.status_code}")
         print(f"Reason: {response.text}")
-        return False
+        return None
 
-    return True
+    xmltree = xmltodict.parse(response.text)
+
+    return xmltree
 
 
 ## Do an operator PUT
@@ -42,44 +45,66 @@ def operatorPut(session, server, opname, xmldata):
     return True
 
 
-def enableOperator(session, server, opname):
+def enableOperator(session, server, opname, isMO):
     ## Template for BigFix REST API Operator actions
-    operatorTemplate = '''\
-    <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
-    <Operator>
-    <Name>IEMAdmin</Name>
-    <InterfaceLogins
-    <!-- THESE enable/disable access -->
-    <Console>true</Console>
-    <WebUI>true</WebUI>
-    <API>true</API>
-    </InterfaceLogins>
-    </Operator>
-    </BESAPI>
-    '''.strip()
+    if isMO:
+        operatorTemplate = '''\
+        <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
+        <Operator>
+        <Name>IEMAdmin</Name>
+        <LoginPermission>Unrestricted</LoginPermission>
+        </Operator>
+        </BESAPI>
+        '''.strip()
+    else:
+        operatorTemplate = '''\
+        <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
+        <Operator>
+        <Name>IEMAdmin</Name>
+        <InterfaceLogins>
+        <!-- THESE enable/disable access -->
+        <Console>true</Console>
+        <WebUI>true</WebUI>
+        <API>true</API>
+        </InterfaceLogins>
+        </Operator>
+        </BESAPI>
+        '''.strip()
+
     return operatorPut(session, server, opname, operatorTemplate)
 
 
-def disableOperator(session, server, opname):
+def disableOperator(session, server, opname, isMO):
     ## Template for BigFix REST API Operator actions
-    operatorTemplate = '''\
-    <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
-    <Operator>
-    <Name>IEMAdmin</Name>
-    <InterfaceLogins
-    <!-- THESE enable/disable access -->
-    <Console>false</Console>
-    <WebUI>false</WebUI>
-    <API>false</API>
-    </InterfaceLogins>
-    </Operator>
-    </BESAPI>
-    '''.strip()
+    if isMO:
+        operatorTemplate = '''\
+        <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
+        <Operator>
+        <Name>IEMAdmin</Name>
+        <LoginPermission>Disabled</LoginPermission>
+        </Operator>
+        </BESAPI>
+        '''.strip()
+    else:
+        operatorTemplate = '''\
+        <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
+        <Operator>
+        <Name>IEMAdmin</Name>
+        <InterfaceLogins>
+        <!-- THESE enable/disable access -->
+        <Console>false</Console>
+        <WebUI>false</WebUI>
+        <API>false</API>
+        </InterfaceLogins>
+        </Operator>
+        </BESAPI>
+        '''.strip()
+
     return operatorPut(session, server, opname, operatorTemplate)
 
 def chgOperatorPassword(session, server, opname, password):
     ## Template for BigFix REST API Operator actions
-    operatorTemplate = '''\
+    operatorTemplate = f'''\
     <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
     <Operator>
     <Name>IEMAdmin</Name>
@@ -87,7 +112,9 @@ def chgOperatorPassword(session, server, opname, password):
     </Operator>
     </BESAPI>
     '''.strip()
+
     return operatorPut(session, server, opname, operatorTemplate)
+
 
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -156,15 +183,22 @@ if response.status_code < 200 or response.status_code >= 300:
     print(f"Reason: {response.text}")
     sys.exit(1)
 
-if not operatorExists(session, args.bfserver, args.operator):
+opInfo = operatorInfo(session, args.bfserver, args.operator)
+
+if opInfo === None:
     print("Operator does not exist")
     sys.exit(1)
 
+isMO = False
+
+if opInfo["BESAPI"]["Operator"]["MasterOperator"] == "true":
+    isMO = True
+
 if args.enable:
-    if not enableOperator(session, args.bfserver, args.operator):
+    if not enableOperator(session, args.bfserver, args.operator, isMO):
         sys.exit(1)
 elif args.disable:
-    if not disableOperator(session, args.bfserver, args.operator):
+    if not disableOperator(session, args.bfserver, args.operator, isMO):
         sys.exit(1)
 elif args.changepw:
     if not chgOperatorPassword(session, args.bfserver, args.operator, args.changepw):
@@ -173,4 +207,5 @@ else:
     print("Invalid operation")
     sys.exit(1)
 
+print("REST API Operation successful\n")
 sys.exit(0)
