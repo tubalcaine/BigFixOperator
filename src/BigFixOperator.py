@@ -185,7 +185,7 @@ if response.status_code < 200 or response.status_code >= 300:
 
 opInfo = operatorInfo(session, args.bfserver, args.operator)
 
-if opInfo === None:
+if opInfo == None:
     print("Operator does not exist")
     sys.exit(1)
 
