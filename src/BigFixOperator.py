@@ -156,10 +156,7 @@ if args.bfpass == None:
 else:
     passwd = args.bfpass
 
-
 ## We have parsed our command line arguments.
-
-
 
 ## Create HTTP(S) session
 session = requests.Session()
@@ -179,6 +176,10 @@ if opInfo == None:
     print("Operator does not exist")
     sys.exit(1)
 
+if ("LDAPDN" in opInfo["BESAPI"]["Operator"]) and (args.changepw != None):
+    print("You cannot change the password of an LDAP/AD BigFix user through the REST API")
+    sys.exit(1)
+    
 isMO = False
 
 if opInfo["BESAPI"]["Operator"]["MasterOperator"] == "true":
