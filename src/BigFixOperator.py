@@ -1,15 +1,97 @@
-from typing_extensions import Required
 import requests
 import argparse
 import sys
-
-
+import getpass
 
 # This is here ONLY to suppress self-signed certoficate warnings
 import urllib3
+
+def operatorExists(session, server, opname):
+    url = f"https://{server}/api/operator/{opname}"
+    response = session.get(url, verify=False)
+
+    if response.status_code < 200 or response.status_code >= 300:
+        print(f"REST API authentication failed with status {response.status_code}")
+        print(f"Reason: {response.text}")
+        return False
+
+    return True
+
+
+## Do an operator PUT
+def operatorPut(session, server, opname, xmldata):
+    qheader = {
+        'Content-Type' : 'application/x-www-form-urlencoded'
+    }
+
+    req = requests.Request('PUT'
+        , f"https://{server}/api/operator/{opname}"
+        , headers=qheader
+        , data=xmldata
+    )
+
+    prepped = session.prepare_request(req)
+
+    result = session.send(prepped, verify = False)
+
+    if response.status_code < 200 or response.status_code >= 300:
+        print(f"REST API authentication failed with status {response.status_code}")
+        print(f"Reason: {response.text}")
+        return False
+
+    return True
+
+
+def enableOperator(session, server, opname):
+    ## Template for BigFix REST API Operator actions
+    operatorTemplate = '''\
+    <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
+    <Operator>
+    <Name>IEMAdmin</Name>
+    <InterfaceLogins
+    <!-- THESE enable/disable access -->
+    <Console>true</Console>
+    <WebUI>true</WebUI>
+    <API>true</API>
+    </InterfaceLogins>
+    </Operator>
+    </BESAPI>
+    '''.strip()
+    return operatorPut(session, server, opname, operatorTemplate)
+
+
+def disableOperator(session, server, opname):
+    ## Template for BigFix REST API Operator actions
+    operatorTemplate = '''\
+    <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
+    <Operator>
+    <Name>IEMAdmin</Name>
+    <InterfaceLogins
+    <!-- THESE enable/disable access -->
+    <Console>false</Console>
+    <WebUI>false</WebUI>
+    <API>false</API>
+    </InterfaceLogins>
+    </Operator>
+    </BESAPI>
+    '''.strip()
+    return operatorPut(session, server, opname, operatorTemplate)
+
+def chgOperatorPassword(session, server, opname, password):
+    ## Template for BigFix REST API Operator actions
+    operatorTemplate = '''\
+    <BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
+    <Operator>
+    <Name>IEMAdmin</Name>
+    <Password>{password}</Password>
+    </Operator>
+    </BESAPI>
+    '''.strip()
+    return operatorPut(session, server, opname, operatorTemplate)
+
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # End of warning supression
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-s", "--bfserver"
@@ -26,7 +108,6 @@ parser.add_argument("-u", "--bfuser"
 	)
 parser.add_argument("-p", "--bfpass"
 	, help="BigFix REST API Password"
-    , required=True
     , type=str
 	)
 parser.add_argument("-o", "--operator"
@@ -50,74 +131,46 @@ opgroup.add_argument("-c", "--changepw"
     , type=str
 	)
 
-
 args = parser.parse_args()
+
+if args.bfpass == None:
+    ## TODO: Modify to prompt until 2 consecutive matching passwords
+    passwd = getpass.getpass(prompt="Enter REST API password:")
+else:
+    passwd = args.bfpass
 
 
 ## We have parsed our command line arguments.
 
-## Template for BigFix REST API Operator actions
-operatorTemplate = f''' \
-<BESAPI xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BESAPI.xsd">
-<Operator>
-<Name>IEMAdmin</Name>
-<!-- THIS is where you can specify a new password -->
-<Password>MyNewPassword</Password>
-<MasterOperator>true</MasterOperator>
-<CustomContent>true</CustomContent>
-<ShowOtherActions>true</ShowOtherActions>
-<StopOtherActions>true</StopOtherActions>
-<CanCreateActions>true</CanCreateActions>
-<PostActionBehaviorPrivilege>AllowRestartAndShutdown</PostActionBehaviorPrivilege>
-<ActionScriptCommandsPrivilege>AllowRestartAndShutdown</ActionScriptCommandsPrivilege>
-<CanLock>true</CanLock>
-<CanSendMultipleRefresh>true</CanSendMultipleRefresh>
-<CanSubmitQueries>true</CanSubmitQueries>
-<LoginPermission>Unrestricted</LoginPermission>
-<UnmanagedAssetPrivilege>ShowAll</UnmanagedAssetPrivilege>
-<InterfaceLogins
-<!-- THESE enable/disable access -->
-<Console>true</Console>
-<WebUI>true</WebUI>
-<API>true</API>
-<Applications>
-<Name>autopatch</Name>
-<Name>cmep</Name>
-<Name>content</Name>
-<Name>custom</Name>
-<Name>insights</Name>
-<Name>mdm</Name>
-<Name>patch</Name>
-<Name>prfmgr</Name>
-<Name>query</Name>
-<Name>swd</Name>
-<Name>workflow</Name>
-</Applications>
-</InterfaceLogins>
-<ComputerAssignments/>
-</Operator>
-</BESAPI>
-'''.strip()
 
-session = requests.Session();
-session.auth = (bf_username, bf_password)
-response = session.get("https://" + bf_server + "/api/login", verify=False);
 
-qheader = {
-	'Content-Type' : 'application/x-www-form-urlencoded'
-}
+## Create HTTP(S) session
+session = requests.Session()
+session.auth = (args.bfuser, passwd)
 
-qquery = {
-	"relevance" : query,
-	"output"    : "json"
-}
+response = session.get(f"https://{args.bfserver}/api/login", verify=False)
 
-req = requests.Request('POST'
-	, "https://" + bf_server + "/api/query"
-	, headers=qheader
-	, data=qquery
-)
+## Terminate if not a success code
+if response.status_code < 200 or response.status_code >= 300:
+    print(f"REST API authentication failed with status {response.status_code}")
+    print(f"Reason: {response.text}")
+    sys.exit(1)
 
-prepped = session.prepare_request(req)
+if not operatorExists(session, args.bfserver, args.operator):
+    print("Operator does not exist")
+    sys.exit(1)
 
-result = session.send(prepped, verify = False)
+if args.enable:
+    if not enableOperator(session, args.bfserver, args.operator):
+        sys.exit(1)
+elif args.disable:
+    if not disableOperator(session, args.bfserver, args.operator):
+        sys.exit(1)
+elif args.changepw:
+    if not chgOperatorPassword(session, args.bfserver, args.operator, args.changepw):
+        sys.exit(1)
+else:
+    print("Invalid operation")
+    sys.exit(1)
+
+sys.exit(0)
