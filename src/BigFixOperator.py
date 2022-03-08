@@ -7,6 +7,8 @@ import xmltodict
 # This is here ONLY to suppress self-signed certoficate warnings
 import urllib3
 
+__version__ = "0.0.1"
+
 def get_operator_info(session, server, opname):
     url = f"https://{server}/api/operator/{opname}"
     result = session.get(url, verify=False)
