@@ -5,6 +5,7 @@ FROM ubuntu:latest
 LABEL org.label-schema.schema-version="1.0"
 LABEL org.label-schema.name="BigFixOperator"
 LABEL org.label-schema.description="Run bigfixoperator on Ubuntu:latest"
+# to run interactive: docker run --rm -it --entrypoint bash bigfixoperator
 LABEL org.label-schema.docker.cmd="docker run --rm bigfixoperator"
 
 # https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
